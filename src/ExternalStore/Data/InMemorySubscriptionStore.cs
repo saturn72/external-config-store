@@ -1,17 +1,29 @@
 ﻿using ExternalStore.Services.Subscription;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ExternalStore.Data
 {
-    public sealed class InMemorySubscriptionStore : ISubscriptionStore
+    public sealed class InMemorySubscriptionStore : ISubscriptionStore, IDisposable
     {
         private readonly List<SubscriptionDbModel> _subscriptions = new();
+        private readonly ClearSubscriptionsOptions _options;
         private readonly ISystemClock _clock;
+        private readonly Timer _timer;
+        private readonly ILogger<InMemorySubscriptionStore> _logger;
 
-        public InMemorySubscriptionStore(ISystemClock clock)
+        public InMemorySubscriptionStore(
+            IOptions<ClearSubscriptionsOptions> options,
+            ISystemClock clock,
+            ILogger<InMemorySubscriptionStore> logger)
         {
+            _options = options.Value;
             _clock = clock;
+            _timer = new Timer(o => Handler(), null, _options.SecondsDueTime, _options.SecondsPeriod);
+            _logger = logger;
         }
+
         public Task Add(IEnumerable<SubscriptionToPathRequest> requests)
         {
             var dbModels = requests.Select(toDbModel);
@@ -32,18 +44,25 @@ namespace ExternalStore.Data
                     Transport = request.Transport,
                     Handle = request.Handle,
                     SubscribedAt = epoch,
-                    Expiration = request.Expiration,
+                    AbsoluteExpiration = request.Expiration,
                     ExpiresAt = epoch + request.Expiration,
                     RequestedExpiration = request.RequestedExpiration,
                 };
             }
         }
 
-        public Task ClearExpired()
+        public void Handler()
         {
+            _logger.LogInformation($"{nameof(Handler)} is working.");
+
             var epoch = _clock.UtcNow.ToUnixTimeSeconds();
             _subscriptions.RemoveAll(s => epoch <= s.ExpiresAt);
-            return Task.CompletedTask;
+        }
+
+        public void Dispose()
+        {
+            _timer?.Change(Timeout.Infinite, 0);
+            _timer?.Dispose();
         }
 
         private class SubscriptionDbModel
@@ -55,10 +74,9 @@ namespace ExternalStore.Data
             public string? Transport { get; init; }
             public string? Handle { get; set; }
             public long SubscribedAt { get; set; }
-            public uint Expiration { get; set; }
+            public uint AbsoluteExpiration { get; set; }
             public uint RequestedExpiration { get; set; }
             public long ExpiresAt { get; internal set; }
         }
     }
-
 }

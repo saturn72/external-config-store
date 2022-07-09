@@ -9,9 +9,10 @@ namespace ExternalStore.API
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
-            new DataConfigurar().Configure(builder.Services, builder.Configuration);
+            builder.Services.AddInMemoryStore(Config.Clients)
+                .AddInMemorySubscriptionStore(builder.Configuration );
+
             new EasyCachingConfigurar().Configure(builder.Services);
-            new ServicesConfigurar().Configure(builder.Services, builder.Configuration);
 
             var app = builder.Build();
 
@@ -20,7 +21,6 @@ namespace ExternalStore.API
             app.UseHttpsRedirection();
 
             app.UseAuthorization();
-
 
             app.MapControllers();
 
