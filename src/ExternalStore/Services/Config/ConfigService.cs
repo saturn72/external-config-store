@@ -2,106 +2,134 @@
 using ExternalStore.Data;
 using ExternalStore.Domain;
 using Microsoft.Extensions.Logging;
+using System;
 using System.Text.Json;
 
 namespace ExternalStore.Services.Config
 {
     public class ConfigService : IConfigService
     {
-        private static readonly JsonElement DefaultJsonElement = new();
-        private readonly IEasyCachingProvider _cache;
         private readonly IConfigStore _store;
+        private readonly IEasyCachingProvider _cache;
         private readonly ILogger<ConfigService> _logger;
 
         public ConfigService(
-            IEasyCachingProvider cache,
             IConfigStore store,
+            IEasyCachingProvider cache,
             ILogger<ConfigService> logger)
         {
-            _cache = cache;
             _store = store;
+            _cache = cache;
             _logger = logger;
         }
 
         public async Task GetConfigByKey(GetConfigByKeyContext context)
         {
-            await GetConfigByKeyInternal(context.ConfigKey, context);
+            context.Result = await GetConfigByKeyInternal(context.ConfigKey);
+            if (context.Result.Equals(default))
+            {
+                context.Error = $"Failed to get config for \'key\'= {context.ConfigKey}";
+                _logger.LogError(context.Error);
+                return;
+            }
         }
 
         public async Task GetConfigByKeyAndPath(GetConfigByKeyAndPathContext context)
         {
-            var ck = ConfigCaching.BuildGetByKey(context.ConfigKey);
-            var cv = await _cache.GetAsync<JsonElement>(ck);
-
-            if (cv.HasValue && cv.Value.ValueKind != JsonValueKind.Undefined)
+            var (validPaths, invalidPaths) = ValidatePaths(context.Paths);
+            if (invalidPaths.Any())
             {
-                context.SetErrors($"Failed to get config for \'key\'= {context.ConfigKey}",
-                    "Key not exists");
+                context.SetErrors($"Invalid paths located: {invalidPaths.ToJsonString()}",
+                    "Invalid Request");
                 _logger.LogError(context.Error);
                 return;
             }
-            else
+
+            var cfg = await GetConfigByKeyInternal(context.ConfigKey);
+            if (cfg.Equals(default))
             {
-                var json = await _store.GetConfigByKey(context.ConfigKey);
-                if (json == default)
-                {
-                    context.SetErrors($"Failed to get config for \'key\'= {context.ConfigKey}",
-                    "Key not exists");
-                    _logger.LogError(context.Error);
-                    return;
-                }
-                var je = JsonDocument.Parse(json).RootElement;
-                await _cache.SetAsync(ck, cv, ConfigCaching.Expiration);
+                context.Error = $"Failed to get config for \'key\'= {context.ConfigKey}";
+                _logger.LogError(context.Error);
+                return;
             }
 
             context.Result = new Dictionary<string, string>();
-            foreach (var path in context.Paths)
-            {
-                if (context.Result.ContainsKey(path))
-                    continue;
 
-                var json = ParseJsonPath(cv.Value, path);
-                if (json != null)
-                    context.Result[path] = json;
+            var pathKeys = validPaths
+                .Select(vp => ConfigCaching.BuildGetByKeyAndPath(context.ConfigKey, vp.source))
+                .ToArray();
+
+            var entries = await _cache.GetAllAsync<string>(pathKeys);
+            if (entries.Count != validPaths.Count())
+            {
+                var missing = validPaths
+                    .Where(v => !entries.ContainsKey(ConfigCaching.BuildGetByKeyAndPath(context.ConfigKey, v.source)));
+
+                foreach (var (source, pathParts) in missing)
+                {
+                    var json = ParseJsonPath(cfg, pathParts);
+
+                    if (json != null)
+                        context.Result[source] = json;
+                }
             }
         }
 
-        private string? ParseJsonPath(JsonElement jsonElement, string path)
+        private (IEnumerable<(string source, string[] pathParts)>, IEnumerable<string[]>)
+            ValidatePaths(IReadOnlyCollection<string> paths)
+        {
+            var valid = new List<(string, string[])>();
+            var invalid = new List<string[]>();
+
+            foreach (var path in paths)
+            {
+                var jsonPath = path.Split(":");
+                if (jsonPath.All(x => x.HasValue()))
+                {
+                    valid.Add((path, jsonPath));
+                }
+                else
+                {
+                    invalid.Add(jsonPath);
+                }
+            }
+            return (valid, invalid);
+        }
+
+        private string? ParseJsonPath(JsonElement jsonElement, string[] jsonPath)
         {
             var cur = jsonElement;
-            var jsonPath = path.Split(":", StringSplitOptions.RemoveEmptyEntries);
+
             for (var i = 0; i < jsonPath.Length; i++)
             {
-                if (!cur.TryGetProperty(jsonPath[i], out cur))
+                var jp = jsonPath[i];
+                if (!cur.TryGetProperty(jp, out cur))
                 {
-                    _logger.LogError($"Cannot find path \'{jsonPath[i]}\' in config");
+                    _logger.LogError($"Cannot find path \'{jp}\' in config");
                     break;
                 }
-                return cur.ToString();
             }
-            return default;
+            return cur.ToString();
         }
 
-        private async Task GetConfigByKeyInternal(string configKey, ContextBase<JsonElement> context)
+        private async Task<JsonElement> GetConfigByKeyInternal(string configKey)
         {
             var ck = ConfigCaching.BuildGetByKey(configKey);
             var res = await _cache.GetAsync<JsonElement>(ck);
 
             if (res.HasValue && res.Value.ValueKind != JsonValueKind.Undefined)
-            {
-                context.Result = res.Value;
-                return;
-            }
+                return default;
+
+            if (res.HasValue)
+                return res.Value;
 
             var json = await _store.GetConfigByKey(configKey);
             if (json == default)
-            {
-                context.Error = $"Failed to get config for \'key\'= {configKey}";
-                _logger.LogError(context.Error);
-                return;
-            }
-            context.Result = JsonDocument.Parse(json).RootElement;
-            await _cache.SetAsync(ck, context.Result, ConfigCaching.Expiration);
+                return default;
+
+            var je = JsonDocument.Parse(json).RootElement;
+            await _cache.SetAsync(ck, je, ConfigCaching.Expiration);
+            return je;
         }
     }
 }

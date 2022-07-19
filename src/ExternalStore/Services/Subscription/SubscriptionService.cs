@@ -1,26 +1,31 @@
 ﻿using EasyCaching.Core;
+using ExternalStore.API.Events;
 using ExternalStore.Data;
 using ExternalStore.Domain;
+using ExternalStore.Events;
 using Microsoft.Extensions.Logging;
 
 namespace ExternalStore.Services.Subscription
 {
     public class SubscriptionService : ISubscriptionService
     {
-        private readonly IClientStore _store;
+        private readonly IClientStore _clients;
+        private readonly ISubscriptionStore _subscriptions;
         private readonly IEasyCachingProvider _cache;
-        private readonly ISubscriptionManager _subscriptionManager;
+        private readonly IEventPublisher _events;
         private readonly ILogger<SubscriptionService> _logger;
 
         public SubscriptionService(
-            IClientStore store,
+            IClientStore clients,
+            ISubscriptionStore subscriptions,
             IEasyCachingProvider cache,
-            ISubscriptionManager subscriptionManager,
+            IEventPublisher events,
             ILogger<SubscriptionService> logger)
         {
-            _store = store;
+            _clients = clients;
+            _subscriptions = subscriptions;
+            _events = events;
             _cache = cache;
-            _subscriptionManager = subscriptionManager;
             _logger = logger;
         }
         public async Task Subscribe(SubscriptionRequestContext context)
@@ -41,14 +46,31 @@ namespace ExternalStore.Services.Subscription
                 return;
             }
 
-            await _subscriptionManager.AddSubscriptions(context);
+            foreach (var req in context.Requests)
+            {
+                req.Handle = Guid.NewGuid().ToString("N");
+                req.Expiration = req.RequestedExpiration != 0 ?
+                    Math.Min(req.RequestedExpiration, context.Client.Expiration) :
+                    req.RequestedExpiration;
+            }
+            await _subscriptions.Add(context.Requests);
+            _ = _events.Publish(EventKeys.Subscription.Added, context);
+            
+            //cache
+            var groups = context.Requests.GroupBy(x => x.Expiration);
+
+            foreach (var g in groups)
+            {
+                var d = g.ToDictionary(k => SubscriptionCaching.BuildGetByHandle(k.Handle));
+                await _cache.SetAllAsync(d, TimeSpan.FromSeconds(g.Key));
+            }
         }
 
         private async Task<Client?> GetClientById(string? clientId)
         {
             var key = ClientCaching.BuildGetById(clientId);
             var cv = await _cache.GetAsync(key,
-                () => _store.GetClientById(clientId),
+                () => _clients.GetClientById(clientId),
                 ClientCaching.Expiration);
 
             return cv.Value;

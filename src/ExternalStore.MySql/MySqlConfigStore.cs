@@ -16,5 +16,11 @@ namespace ExternalStore.Data.MySql
             using var con = new MySqlConnection(_connectionString);
             return await con.QuerySingleOrDefaultAsync<string>(Dapper.Config.GetConfigByKey, new { configKey });
         }
+
+        public Task<IEnumerable<string>> GetConfigKeys()
+        {
+            using var con = new MySqlConnection(_connectionString);
+            return con.QuerySingleOrDefaultAsync<IEnumerable<string>>(Dapper.Config.GetConfigKeys);
+        }
     }
 }

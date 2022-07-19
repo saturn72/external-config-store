@@ -9,8 +9,11 @@ namespace ExternalStore.API
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
-            builder.Services.AddInMemoryStore(Config.Clients)
-                .AddInMemorySubscriptionStore(builder.Configuration );
+            builder.Services
+                .AddExternalConfigStore()
+                .AddInMemoryStore(Config.Clients)
+                .AddFileConfigStore(o => o.EnableNotifications = false)
+                .AddInMemorySubscriptionStore(builder.Configuration);
 
             new EasyCachingConfigurar().Configure(builder.Services);
 

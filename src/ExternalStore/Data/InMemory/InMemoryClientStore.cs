@@ -1,6 +1,6 @@
 ﻿using ExternalStore.Domain;
 
-namespace ExternalStore.Data
+namespace ExternalStore.Data.InMemory
 {
     public sealed class InMemoryClientStore : IClientStore
     {

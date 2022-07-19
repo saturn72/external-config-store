@@ -1,4 +1,8 @@
-﻿using ExternalStore.Data;
+﻿using ExternalStore.API.Configurars;
+using ExternalStore.API.Events;
+using ExternalStore.Data;
+using ExternalStore.Data.Files;
+using ExternalStore.Data.InMemory;
 using ExternalStore.Domain;
 using ExternalStore.Services.Config;
 using ExternalStore.Services.Subscription;
@@ -13,22 +17,42 @@ namespace Microsoft.Extensions.DependencyInjection
         {
             services.TryAddSingleton<IConfigService, ConfigService>();
             services.TryAddSingleton<ISubscriptionService, SubscriptionService>();
+            services.TryAddSingleton<IEventPublisher, DefaultEventPublisher>();
+            services.AddSingleton<IConfigStoreFactory, DefaultConfigStoreFactory>();
+
             return services;
         }
 
-        public static IServiceCollection AddInMemoryStore(this IServiceCollection services, IEnumerable<Client> clients)
+        public static IServiceCollection AddInMemoryStore(
+            this IServiceCollection services,
+            IEnumerable<Client> clients)
         {
             services.AddSingleton<IClientStore>(sp => new InMemoryClientStore(clients));
 
             return services;
         }
 
-        public static IServiceCollection AddInMemorySubscriptionStore(this IServiceCollection services, IConfiguration configuration, string section = ClearSubscriptionsOptions.Section)
+        public static IServiceCollection AddInMemorySubscriptionStore(
+            this IServiceCollection services,
+            IConfiguration configuration,
+            string section = ClearSubscriptionsOptions.Section)
         {
             services.AddAuthentication();
             services.AddSingleton<ISubscriptionStore, InMemorySubscriptionStore>();
             services.AddOptions<ClearSubscriptionsOptions>()
                 .Bind(configuration.GetSection(section));
+
+            return services;
+        }
+
+        public static IServiceCollection AddFileConfigStore(
+            this IServiceCollection services,
+            Action<FileConfigStoreOptions>? config = null)
+        {
+            var options = new FileConfigStoreOptions();
+            config?.Invoke(options);
+
+            services.AddSingleton<IConfigStore>(sp => new FileConfigStore(options));
 
             return services;
         }

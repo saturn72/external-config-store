@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace ExternalStore.Data
+namespace ExternalStore.Data.InMemory
 {
     public sealed class InMemorySubscriptionStore : ISubscriptionStore, IDisposable
     {

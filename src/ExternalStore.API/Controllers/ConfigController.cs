@@ -1,7 +1,5 @@
-using ExternalStore.API.Models;
 using ExternalStore.Domain;
 using ExternalStore.Services.Config;
-using ExternalStore.Services.Subscription;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExternalStore.API.Controllers
@@ -10,15 +8,11 @@ namespace ExternalStore.API.Controllers
     [Route("config")]
     public class ConfigController : ControllerBase
     {
-        private readonly IConfigService _configService;
-        private readonly ISubscriptionService _subscriptionService;
+        private readonly IConfigService _service;
 
-        public ConfigController(
-            IConfigService configService,
-            ISubscriptionService subscriptionService)
+        public ConfigController(IConfigService service)
         {
-            _configService = configService;
-            _subscriptionService = subscriptionService;
+            _service = service;
         }
 
         [HttpGet("{key}")]
@@ -31,7 +25,7 @@ namespace ExternalStore.API.Controllers
             {
                 ConfigKey = key,
             };
-            await _configService.GetConfigByKey(context);
+            await _service.GetConfigByKey(context);
 
             if (context.IsError)
                 return BadRequest(context.UserError);
@@ -57,50 +51,12 @@ namespace ExternalStore.API.Controllers
                 Paths = paths,
             };
 
-            await _configService.GetConfigByKeyAndPath(context);
+            await _service.GetConfigByKeyAndPath(context);
 
             if (context.IsError)
                 return BadRequest(context.UserError);
 
             return new JsonResult(context.Result);
-        }
-
-        [HttpPost("subscribe")]
-        public async Task<IActionResult> Subscribe([FromBody] IEnumerable<SubscriptionRequestModel> model)
-        {
-            if (!ModelState.IsValid)
-                return BadRequest();
-
-            var clientId = User.FindFirst("client-id");
-            if (clientId == null)
-                return BadRequest();
-
-            var requests = model.Select(s => new SubscriptionToPathRequest
-            {
-                ConfigKey = s.ConfigKey,
-                Path = s.Path,
-                Priority = s.Priority,
-                Transport = s.Transport.ToLower(),
-            }).ToList();
-
-            var context = new SubscriptionRequestContext
-            {
-                Requests = requests,
-                ClientId = clientId.Value,
-            };
-
-            await _subscriptionService.Subscribe(context);
-
-            if (context.IsError)
-                return BadRequest(context.UserError);
-            throw new NotImplementedException("return all records");
-
-            //var sr = new
-            //{
-            //    subscribedAt = context.SubscribedAt.ToUnixTimeSeconds(),
-            //    expiration = context.Expiration,
-            //};
-            //return Ok(sr);
         }
     }
 }

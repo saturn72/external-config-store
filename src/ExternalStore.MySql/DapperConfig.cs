@@ -12,6 +12,7 @@
             //    $"{nameof(AccountDomainModel.Name)} " +
             //    $"FROM {TableName} WHERE ";
 
+            public static readonly string GetConfigKeys = $"SELECT ConfigKey FROM {TableName}";
             public static readonly string GetConfigByKey = $"SELECT Value FROM {TableName} WHERE configKey = @ConfigKey";
         }
     }
