@@ -60,10 +60,12 @@ namespace ExternalStore.Services.Config
                 .ToArray();
 
             var entries = await _cache.GetAllAsync<string>(pathKeys);
-            if (entries.Count != validPaths.Count())
+            var entriesWithValue = entries.Where(e => e.Value.HasValue).ToDictionary(k => k.Key, v => v.Value);
+
+            if (entriesWithValue.Count() != validPaths.Count())
             {
                 var missing = validPaths
-                    .Where(v => !entries.ContainsKey(ConfigCaching.BuildGetByKeyAndPath(context.ConfigKey, v.source)));
+                    .Where(v => !entriesWithValue.ContainsKey(ConfigCaching.BuildGetByKeyAndPath(context.ConfigKey, v.source)));
 
                 foreach (var (source, pathParts) in missing)
                 {
@@ -123,11 +125,10 @@ namespace ExternalStore.Services.Config
             if (res.HasValue)
                 return res.Value;
 
-            var json = await _store.GetConfigByKey(configKey);
-            if (json == default)
+            var je = await _store.GetConfigByKey(configKey);
+            if (je.Equals(default))
                 return default;
 
-            var je = JsonDocument.Parse(json).RootElement;
             await _cache.SetAsync(ck, je, ConfigCaching.Expiration);
             return je;
         }

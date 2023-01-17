@@ -24,7 +24,8 @@ namespace ExternalStore.API.Configurars
             if (!_configs.TryGetValue(key, out var store))
                 return null;
 
-            return await store.GetConfigByKey(key);
+            var j = await store.GetConfigByKey(key);
+            return j.ToJsonString();
         }
     }
 }

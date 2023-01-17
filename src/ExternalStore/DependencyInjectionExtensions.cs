@@ -8,6 +8,7 @@ using ExternalStore.Services.Config;
 using ExternalStore.Services.Subscription;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Extensions.DependencyInjection
 {
@@ -52,9 +53,11 @@ namespace Microsoft.Extensions.DependencyInjection
             var options = new FileConfigStoreOptions();
             config?.Invoke(options);
 
-            services.AddSingleton<IConfigStore>(sp => new FileConfigStore(options));
-
-            return services;
+            return services.AddSingleton<IConfigStore>(sp =>
+                new FileConfigStore(
+                    options,
+                    sp.GetService<ILogger<FileConfigStore>>())
+                );
         }
     }
 }

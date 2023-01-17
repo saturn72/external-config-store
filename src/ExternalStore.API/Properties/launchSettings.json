@@ -12,7 +12,7 @@
     "ExternalStore.API": {
       "commandName": "Project",
       "launchBrowser": true,
-      "launchUrl": "config/key1",
+      "launchUrl": "config/key1/key,connectionStrings:cs2_key",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },

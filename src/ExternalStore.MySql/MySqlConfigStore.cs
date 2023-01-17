@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using MySql.Data.MySqlClient;
+using System.Text.Json;
 
 namespace ExternalStore.Data.MySql
 {
@@ -11,10 +12,11 @@ namespace ExternalStore.Data.MySql
         {
             _connectionString = connectionString;
         }
-        public async Task<string?> GetConfigByKey(string? configKey)
+        public async Task<JsonElement> GetConfigByKey(string? configKey)
         {
             using var con = new MySqlConnection(_connectionString);
-            return await con.QuerySingleOrDefaultAsync<string>(Dapper.Config.GetConfigByKey, new { configKey });
+            var json =  await con.QuerySingleOrDefaultAsync<string>(Dapper.Config.GetConfigByKey, new { configKey });
+            return JsonDocument.Parse(json).RootElement;
         }
 
         public Task<IEnumerable<string>> GetConfigKeys()

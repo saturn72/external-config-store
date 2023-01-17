@@ -16,8 +16,4 @@
     <ProjectReference Include="..\ExternalStore.MySql\ExternalStore.Data.MySql.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="config-files\" />
-  </ItemGroup>
-
 </Project>

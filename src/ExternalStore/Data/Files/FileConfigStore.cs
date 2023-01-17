@@ -1,20 +1,44 @@
-﻿namespace ExternalStore.Data.Files
+﻿using Microsoft.Extensions.Logging;
+using System.Text.Json;
+
+namespace ExternalStore.Data.Files
 {
     public class FileConfigStore : IConfigStore, IDisposable
     {
         private readonly FileConfigStoreOptions _options;
         private readonly FileSystemWatcher? _watcher;
-        public FileConfigStore(FileConfigStoreOptions options)
+        private readonly ILogger<FileConfigStore> _logger;
+
+        public FileConfigStore(
+            FileConfigStoreOptions options,
+            ILogger<FileConfigStore> logger)
         {
             _options = options;
             if (_options.EnableNotifications)
                 _watcher = StartDirectoryWatcher(options.RootDirectory);
+
+            _logger = logger;
         }
-        public Task<string?> GetConfigByKey(string? key)
+
+        public async Task<JsonElement> GetConfigByKey(string? key)
         {
-            throw new NotImplementedException();
+            _logger.LogDebug($"Getting config key: {key}");
+            var fullPath = Path.Combine(_options.RootDirectory, key + ".json");
+
+            using var stream = File.OpenRead(fullPath);
+
+            try
+            {
+                var jd = await JsonDocument.ParseAsync(stream);
+                return jd.RootElement;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.Message);
+            }
+            return default;
         }
-        
+
         public Task<IEnumerable<string>> GetConfigKeys()
         {
             throw new NotImplementedException();

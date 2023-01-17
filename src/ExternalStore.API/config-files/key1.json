@@ -1,0 +1,9 @@
+{
+  "key": "value",
+  "connectionStrings": {
+    "cs1_key": "cs1_value",
+    "cs2_key": "cs2_value",
+    "cs3_key": "cs3_value"
+  },
+  "userId": "userIdValue"
+}
